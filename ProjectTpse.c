@@ -29,185 +29,111 @@ Pour réduire ces risques, il est important de bien synchroniser l'accès aux do
 En plus de ces risques, il est également important de prendre en compte les performances du système. Le modèle producteur/consommateur peut être efficace pour les tâches qui nécessitent un traitement en parallèle, mais il peut également avoir un impact négatif sur les performances si le tampon est trop petit ou si la synchronisation des threads est mal gérée.
 
 le programme :
-
-
 #include <stdio.h>
-#include<stdlib.h>
+#include <stdlib.h>
 #include <pthread.h>
 
-#define N 100
+#define n1 3
+#define m1 3 
+#define n2 3 
+#define m2 3 
+#define N (n1 * m2) // Taille du tampon
 
-int B[N][N];
-int C[N][N];
-int A[N][N];
-
+int B[n1][m1];
+int C[n2][m2];
+int A[n1][m2];
 int T[N];
+/*vous qui enter les valeure de matrice B et C*/
+void *producer(void *arg) {
+    int row = *((int *)arg);
 
-pthread_mutex_t mutex;
-pthread_cond_t condition;
-
-void *producteur(void *arg) {
-  int i = *(int *)arg;
-  for (int j = 0; j < N; j++) {
-    // Calculer le résultat de la ligne i, colonne j de la matrice résultante A
-    int resultat = 0;
-    for (int k = 0; k < N; k++) {
-      resultat += B[i][k] * C[k][j];
+    for (int j = 0; j < m2; j++) {
+        int result = 0;
+        for (int k = 0; k < m1; k++) {
+            result += B[row][k] * C[k][j];
+        }
+        T[row * m2 + j] = result;
     }
 
-    // Placer le résultat dans le tampon T
-    pthread_mutex_lock(&mutex);
-    T[i * N + j] = resultat;
-    pthread_mutex_unlock(&mutex);
-
-    // Signaler à un consommateur disponible qu'il y a un élément disponible
-    pthread_cond_signal(&condition);
-  }
+    pthread_exit(NULL);
 }
 
-void *consommateur(void *arg) {
-  while (1) {
-    // Attendre qu'un élément soit disponible dans le tampon T
-    pthread_mutex_lock(&mutex);
-    if (T[0] == 0) {
-      pthread_cond_wait(&condition, NULL);
-    }
-    int resultat = T[0];
-    pthread_mutex_unlock(&mutex);
+void *consumer(void *arg) {
+    int index = *((int *)arg);
+    int row = index / m2;
+    int col = index % m2;
 
-    // Placer le résultat dans la matrice résultante A
-    A[resultat / N][resultat % N] = resultat;
-  }
+    A[row][col] = T[index];
+
+    pthread_exit(NULL);
+}
+
+void print_matrix(char *matrix_name, int rows, int cols, int matrix[rows][cols]) {
+    printf("%s :\n", matrix_name);
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            printf("%d ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void read_matrix(int rows, int cols, int matrix[rows][cols]) {
+    printf("Entrez les valeurs pour la matrice :\n");
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            printf("Element [%d][%d]: ", i, j);
+            scanf("%d", &matrix[i][j]);
+        }
+    }
 }
 
 int main() {
-  // Initialiser les matrices B et C
-  for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
-      B[i][j] = rand() % 100;
-      C[i][j] = rand() % 100;
-    }
-  }
+    printf("Lecture de la matrice B :\n");
+    read_matrix(n1, m1, B);
 
-  // Initialiser le tampon T
-  for (int i = 0; i < N; i++) {
-    T[i] = 0;
-  }
+    printf("\nLecture de la matrice C :\n");
+    read_matrix(n2, m2, C);
 
-  // Créer les threads producteurs
-  pthread_t producteurs[N];
-  for (int i = 0; i < N; i++) {
-    pthread_create(&producteurs[i], NULL, producteur, &i);
-  }
+    printf("\n*******Matrice B*******:\n");
+    print_matrix("Matrice B", n1, m1, B);
 
-  // Créer les threads consommateurs
-  pthread_t consommateurs[N];
-  for (int i = 0; i < N; i++) {
-    pthread_create(&consommateurs[i], NULL, consommateur, NULL);
-  }
+    printf("\n******Matrice C****** :\n");
+    print_matrix("Matrice C", n2, m2, C);
 
-  // Attendre la fin des threads
-  for (int i = 0; i < N; i++) {
-    pthread_join(producteurs[i], NULL);
-    pthread_join(consommateurs[i], NULL);
-  }
+     pthread_t producers[n1], consumers[N];
 
-  // Afficher la matrice résultante A
-  for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
-      printf("%d ", A[i][j]);
-    }
-    printf("\n");
-  }
-
-  return 0;
-}
-
-
-exemple pour le resultat A={  14  22 
-                              32  44  
-                              50  66  }
-
-#include <stdio.h>
-#include<stdlib.h>
-#include <pthread.h>
-
-#define N 3
-
-int B[N][N] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-int C[N][N] = {{1, 2}, {3, 4}, {5, 6}};
-int A[N][N];
-
-int T[N];
-
-pthread_mutex_t mutex;
-pthread_cond_t condition;
-
-void *producteur(void *arg) {
-  int i = *(int *)arg;
-  for (int j = 0; j < N; j++) {
-    // Calculer le résultat de la ligne i, colonne j de la matrice résultante A
-    int resultat = 0;
-    for (int k = 0; k < N; k++) {
-      resultat += B[i][k] * C[k][j];
+    for (int i = 0; i < n1; i++) {
+        pthread_create(&producers[i], NULL, producer, &i);
     }
 
-    // Placer le résultat dans le tampon T
-    pthread_mutex_lock(&mutex);
-    T[i * N + j] = resultat;
-    pthread_mutex_unlock(&mutex);
-
-    // Signaler aux threads consommateurs qu'il y a un élément disponible
-    pthread_cond_broadcast(&condition);
-  }
-}
-
-void *consommateur(void *arg) {
-  while (1) {
-    // Attendre qu'un élément soit disponible dans le tampon T
-    pthread_mutex_lock(&mutex);
-    while (T[0] == 0) {
-      pthread_cond_wait(&condition, &mutex);
+    for (int i = 0; i < N; i++) {
+        pthread_create(&consumers[i], NULL, consumer, &i);
     }
-    int resultat = T[0];
-    pthread_mutex_unlock(&mutex);
 
-    // Placer le résultat dans la matrice résultante A
-    A[resultat / N][resultat % N] = resultat;
-  }
-}
+    for (int i = 0; i < n1; i++) {
+        pthread_join(producers[i], NULL);
+    }
 
-int main() {
-  // Initialiser le tampon T
-  for (int i = 0; i < N; i++) {
-    T[i] = 0;
-  }
+    for (int i = 0; i < N; i++) {
+        pthread_join(consumers[i], NULL);
+    }
 
-  // Créer les threads producteurs
-  pthread_t producteurs[N];
-  for (int i = 0; i < N; i++) {
-    pthread_create(&producteurs[i], NULL, producteur, &i);
-  }
-
-  // Créer les threads consommateurs
-  pthread_t consommateurs[N];
-  for (int i = 0; i < N; i++) {
-    pthread_create(&consommateurs[i], NULL, consommateur, NULL);
-  }
-
-  // Attendre la fin des threads
-  for (int i = 0; i < N; i++) {
-    pthread_join(producteurs[i], NULL);
-    pthread_join(consommateurs[i], NULL);
-  }
-
-  // Afficher la matrice résultante A
-  for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
-      printf("%d ", A[i][j]);
+    // Affichage du contenu du tampon T après le remplissage
+    printf("\nContenu du tampon T après le remplissage :\n");
+    for (int i = 0; i < N; i++) {
+        printf("%d ", T[i]);
     }
     printf("\n");
-  }
 
-  return 0;
+    // Affichage de la matrice résultante A
+    printf("\nMatrice résultante A :\n");
+    print_matrix("Matrice résultante A", n1, m2, A);
+
+    getchar();
+    getchar();
+
+    return 0;
 }
+
+
