@@ -122,3 +122,92 @@ int main() {
 
   return 0;
 }
+
+
+exemple pour le resultat A={  14  22 
+                              32  44  
+                              50  66  }
+
+#include <stdio.h>
+#include<stdlib.h>
+#include <pthread.h>
+
+#define N 3
+
+int B[N][N] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+int C[N][N] = {{1, 2}, {3, 4}, {5, 6}};
+int A[N][N];
+
+int T[N];
+
+pthread_mutex_t mutex;
+pthread_cond_t condition;
+
+void *producteur(void *arg) {
+  int i = *(int *)arg;
+  for (int j = 0; j < N; j++) {
+    // Calculer le résultat de la ligne i, colonne j de la matrice résultante A
+    int resultat = 0;
+    for (int k = 0; k < N; k++) {
+      resultat += B[i][k] * C[k][j];
+    }
+
+    // Placer le résultat dans le tampon T
+    pthread_mutex_lock(&mutex);
+    T[i * N + j] = resultat;
+    pthread_mutex_unlock(&mutex);
+
+    // Signaler aux threads consommateurs qu'il y a un élément disponible
+    pthread_cond_broadcast(&condition);
+  }
+}
+
+void *consommateur(void *arg) {
+  while (1) {
+    // Attendre qu'un élément soit disponible dans le tampon T
+    pthread_mutex_lock(&mutex);
+    while (T[0] == 0) {
+      pthread_cond_wait(&condition, &mutex);
+    }
+    int resultat = T[0];
+    pthread_mutex_unlock(&mutex);
+
+    // Placer le résultat dans la matrice résultante A
+    A[resultat / N][resultat % N] = resultat;
+  }
+}
+
+int main() {
+  // Initialiser le tampon T
+  for (int i = 0; i < N; i++) {
+    T[i] = 0;
+  }
+
+  // Créer les threads producteurs
+  pthread_t producteurs[N];
+  for (int i = 0; i < N; i++) {
+    pthread_create(&producteurs[i], NULL, producteur, &i);
+  }
+
+  // Créer les threads consommateurs
+  pthread_t consommateurs[N];
+  for (int i = 0; i < N; i++) {
+    pthread_create(&consommateurs[i], NULL, consommateur, NULL);
+  }
+
+  // Attendre la fin des threads
+  for (int i = 0; i < N; i++) {
+    pthread_join(producteurs[i], NULL);
+    pthread_join(consommateurs[i], NULL);
+  }
+
+  // Afficher la matrice résultante A
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      printf("%d ", A[i][j]);
+    }
+    printf("\n");
+  }
+
+  return 0;
+}
